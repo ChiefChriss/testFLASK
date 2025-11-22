@@ -91,6 +91,7 @@ class TaskStatus(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     label = db.Column(db.String(50), unique=True, nullable=False)
     is_default = db.Column(db.Boolean, default=False)
+    is_complete = db.Column(db.Boolean, default=False)
 
     tasks = db.relationship("Task", back_populates="status")
 

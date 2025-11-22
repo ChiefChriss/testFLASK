@@ -4,7 +4,7 @@ from functools import wraps
 
 from flask import (
     Flask, render_template, redirect, url_for,
-    request, flash, session
+    request, flash, session, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -36,7 +36,7 @@ def create_app():
             # Default statuses
             open_s = TaskStatus(label="Open", is_default=True)
             in_prog = TaskStatus(label="In-Progress")
-            complete = TaskStatus(label="Complete")
+            complete = TaskStatus(label="Complete", is_complete=True)
             db.session.add_all([open_s, in_prog, complete])
 
             # Default department/role (optional)
@@ -129,6 +129,9 @@ def create_app():
         @wraps(f)
         def decorated(*args, **kwargs):
             if "user_id" not in session:
+                # AJAX request? Return JSON instead of redirect
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"error": "not authenticated"}), 401
                 return redirect(url_for("login"))
             return f(*args, **kwargs)
         return decorated
@@ -137,9 +140,15 @@ def create_app():
         @wraps(f)
         def decorated(*args, **kwargs):
             if "user_id" not in session:
+                # AJAX request? Return JSON instead of redirect
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"error": "not authenticated"}), 401
                 return redirect(url_for("login"))
             user = User.query.get(session["user_id"])
             if not user or not user.is_admin():
+                # AJAX request? Return JSON instead of redirect
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"error": "Admin access required"}), 403
                 flash("Admin access required.", "danger")
                 return redirect(url_for("dashboard"))
             return f(*args, **kwargs)
@@ -223,7 +232,11 @@ def create_app():
         first_name = request.form.get("first_name")
         last_name = request.form.get("last_name")
         address = request.form.get("address")
-        salary = float(request.form.get("salary") or 0)
+        try:
+            salary_input = request.form.get("salary")
+            salary = float(salary_input) if salary_input else 0.0
+        except ValueError:
+            salary = 0.0  # Default to 0 if they type garbage
         date_of_hire = request.form.get("date_of_hire") or None
         date_of_birth = request.form.get("date_of_birth") or None
         department_id = request.form.get("department_id") or None
@@ -301,7 +314,10 @@ def create_app():
         emp.address = request.form.get("address")
         
         salary_str = request.form.get("salary")
-        emp.salary = float(salary_str) if salary_str else None
+        try:
+            emp.salary = float(salary_str) if salary_str else None
+        except ValueError:
+            emp.salary = None  # Default to None if they type garbage
         
         date_of_hire = request.form.get("date_of_hire")
         emp.date_of_hire = datetime.strptime(date_of_hire, "%Y-%m-%d") if date_of_hire else None
@@ -725,17 +741,33 @@ def create_app():
     def update_task_status(task_id):
         user = User.query.get(session["user_id"])
         status_id = request.form.get("status_id")
-        task = Task.query.get_or_404(task_id)
+        
+        # Validate status_id
+        if not status_id:
+            return jsonify({"error": "Missing status_id"}), 400
+        
+        task = Task.query.get(task_id)
+        if not task:
+            return jsonify({"error": "Task not found"}), 404
+        
+        try:
+            status_id = int(status_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid status_id"}), 400
+        
         old_status = task.status.label if task.status else "None"
         task.status_id = status_id
 
         # if marked complete, set completed_at
         status = TaskStatus.query.get(status_id)
-        if status and status.label.lower() == "complete":
+        if not status:
+            return jsonify({"error": "Status not found"}), 400
+            
+        if status.is_complete:
             task.completed_at = datetime.utcnow()
         
         # Notify relevant users about status change
-        new_status_label = status.label if status else "Unknown"
+        new_status_label = status.label
         
         # Notify task creator if they didn't make the change
         if task.created_by_user_id != user.id:
@@ -758,15 +790,29 @@ def create_app():
             )
         
         db.session.commit()
-        flash("Task status updated.", "success")
-        return redirect(url_for("tasks"))
+        
+        # Emit live update to all connected clients
+        if socketio:
+            socketio.emit('task_moved', {
+                'task_id': task.id,
+                'new_status_id': status_id,
+                'status_label': new_status_label,
+                'task_title': task.title
+            }, broadcast=True)
+        
+        # Return JSON for AJAX requests, redirect for form submissions
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": True, "message": "Task status updated."}), 200
+        else:
+            flash("Task status updated.", "success")
+            return redirect(url_for("tasks"))
 
     @app.route("/tasks/<int:task_id>/mark_complete", methods=["POST"])
     @login_required
     def mark_task_complete(task_id):
         task = Task.query.get_or_404(task_id)
         complete_status = TaskStatus.query.filter(
-            TaskStatus.label.ilike("complete")
+            TaskStatus.is_complete == True
         ).first()
         if complete_status:
             task.status = complete_status
@@ -994,7 +1040,7 @@ def create_app():
                 # Determine color based on status
                 color = "#6c757d"  # default gray
                 if task.status:
-                    if task.status.label.lower() == "complete":
+                    if task.status.is_complete:
                         color = "#28a745"  # green
                     elif task.status.label.lower() == "in-progress":
                         color = "#ffc107"  # yellow
