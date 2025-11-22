@@ -7,16 +7,21 @@ from flask import (
     request, flash, session
 )
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
 from models import db, User, Employee, Group, UserGroup, TaskStatus, Task, Department, Role, TaskComment, Notification
 
+socketio = None
+
 
 def create_app():
+    global socketio
     app = Flask(__name__)
     app.config.from_object(Config)
     db.init_app(app)
+    socketio = SocketIO(app, cors_allowed_origins="*")
 
     @app.cli.command("init-db")
     def init_db():
@@ -99,6 +104,25 @@ def create_app():
             created_at=datetime.utcnow()
         )
         db.session.add(notif)
+        db.session.flush()
+        
+        # Get updated unread count for this user
+        unread_count = Notification.query.filter_by(
+            user_id=user_id,
+            is_read=False
+        ).count()
+        
+        # Emit real-time notification via SocketIO
+        if socketio:
+            socketio.emit('new_notification', {
+                'user_id': user_id,
+                'title': title,
+                'message': message,
+                'type': notification_type,
+                'task_id': task_id,
+                'count': unread_count,  # Include count for instant badge update
+                'created_at': notif.created_at.strftime('%b %d, %I:%M %p')
+            }, room=f'user_{user_id}')
 
     # ---------- auth helpers ----------
     def login_required(f):
@@ -648,6 +672,7 @@ def create_app():
             assigned_group_id = None
 
         status_id = request.form.get("status_id") or None
+        due_date = request.form.get("due_date") or None
 
         if not status_id:
             default_status = TaskStatus.query.filter_by(is_default=True).first()
@@ -660,7 +685,8 @@ def create_app():
             assigned_user_id=assigned_user_id,
             assigned_group_id=assigned_group_id,
             created_by_user_id=user.id,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            due_date=datetime.strptime(due_date, "%Y-%m-%d").date() if due_date else None
         )
         db.session.add(task)
         db.session.flush()  # Get task ID
@@ -908,9 +934,107 @@ def create_app():
         flash("All notifications marked as read.", "success")
         return redirect(url_for("notifications"))
 
+    @app.route("/notifications/unread_count")
+    @login_required
+    def unread_notification_count():
+        """API endpoint for polling unread count"""
+        user = User.query.get(session["user_id"])
+        count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
+        return {"count": count}
+
+    @app.route("/notifications/recent")
+    @login_required
+    def recent_notifications():
+        """API endpoint for recent notifications"""
+        user = User.query.get(session["user_id"])
+        notifications = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(5).all()
+        
+        return {
+            "notifications": [
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "message": n.message,
+                    "type": n.notification_type,
+                    "task_id": n.task_id,
+                    "is_read": n.is_read,
+                    "created_at": n.created_at.strftime('%b %d, %I:%M %p') if n.created_at else ""
+                }
+                for n in notifications
+            ]
+        }
+
+    # ---------- calendar routes ----------
+
+    @app.route("/calendar")
+    @login_required
+    def calendar():
+        return render_template("calendar.html")
+
+    @app.route("/calendar/events")
+    @login_required
+    def calendar_events():
+        """API endpoint for FullCalendar events"""
+        user = User.query.get(session["user_id"])
+        
+        # Get tasks visible to user
+        if user.is_admin():
+            tasks = Task.query.all()
+        else:
+            group_ids = [g.id for g in user.groups]
+            tasks = Task.query.filter(
+                (Task.assigned_user_id == user.id) |
+                (Task.assigned_group_id.in_(group_ids)) |
+                (Task.created_by_user_id == user.id)
+            ).all()
+        
+        events = []
+        for task in tasks:
+            if task.due_date:
+                # Determine color based on status
+                color = "#6c757d"  # default gray
+                if task.status:
+                    if task.status.label.lower() == "complete":
+                        color = "#28a745"  # green
+                    elif task.status.label.lower() == "in-progress":
+                        color = "#ffc107"  # yellow
+                    else:
+                        color = "#0d6efd"  # blue
+                
+                events.append({
+                    "id": task.id,
+                    "title": task.title,
+                    "start": task.due_date.strftime('%Y-%m-%d'),
+                    "url": url_for('view_task', task_id=task.id),
+                    "backgroundColor": color,
+                    "borderColor": color,
+                    "extendedProps": {
+                        "status": task.status.label if task.status else "None",
+                        "assignee": task.assignee.username if task.assignee else "Unassigned"
+                    }
+                })
+        
+        return events
+
+    # ---------- socketio event handlers ----------
+    
+    @socketio.on('connect')
+    def handle_connect():
+        if 'user_id' in session:
+            user_id = session['user_id']
+            join_room(f'user_{user_id}')
+            print(f"User {user_id} connected to their notification room")
+    
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        if 'user_id' in session:
+            user_id = session['user_id']
+            leave_room(f'user_{user_id}')
+            print(f"User {user_id} disconnected from their notification room")
+    
     return app
 
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)

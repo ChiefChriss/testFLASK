@@ -109,6 +109,7 @@ class Task(db.Model):
 
     created_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime, nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
 
     status = db.relationship("TaskStatus", back_populates="tasks")
     assignee = db.relationship("User", foreign_keys=[assigned_user_id])
