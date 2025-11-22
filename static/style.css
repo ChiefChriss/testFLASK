@@ -102,6 +102,99 @@ body.dark-mode tr[style*="cursor: pointer"]:hover {
     background-color: rgba(30, 126, 255, 0.1) !important;
 }
 
+/* Account dropdown styling */
+.dropdown-header {
+    padding: 0.75rem 1rem !important;
+}
+
+.dropdown-header .avatar {
+    flex-shrink: 0;
+}
+
+body.dark-mode .dropdown-header {
+    color: #e6e6e6 !important;
+}
+
+body.dark-mode .dropdown-header .text-muted {
+    color: #b0b3b8 !important;
+}
+
+/* Notification bell badge */
+.nav-link .badge {
+    font-size: 0.65rem;
+    padding: 0.25em 0.5em;
+}
+
+/* Fix dropdown z-index */
+.navbar {
+    z-index: 1030 !important;
+    position: relative;
+}
+
+.navbar .dropdown-menu {
+    z-index: 9999 !important;
+}
+
+/* Notification dropdown items */
+.notification-item button {
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    color: inherit !important;
+}
+
+.notification-item button .fw-bold {
+    color: #212529 !important;
+}
+
+.notification-item button .text-muted {
+    color: #6c757d !important;
+}
+
+.notification-item button:hover {
+    background-color: #f8f9fa !important;
+}
+
+body.dark-mode .notification-item button {
+    color: #e6e6e6 !important;
+}
+
+body.dark-mode .notification-item button .fw-bold {
+    color: #ffffff !important;
+}
+
+body.dark-mode .notification-item button .text-muted {
+    color: #b0b3b8 !important;
+}
+
+body.dark-mode .notification-item button:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Notification page items */
+.list-group-item {
+    transition: all 0.2s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa !important;
+}
+
+body.dark-mode .list-group-item {
+    background-color: rgba(30, 30, 32, 0.60) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #e6e6e6 !important;
+}
+
+body.dark-mode .list-group-item:hover {
+    background-color: rgba(40, 40, 44, 0.70) !important;
+}
+
+body.dark-mode .list-group-item-light {
+    background-color: rgba(40, 40, 44, 0.80) !important;
+}
+
 
 /* ============================================================
    DARK MODE 2.0 — Premium UI Edition
