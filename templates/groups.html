@@ -3,9 +3,11 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="h3 mb-0">User Groups</h2>
+    {% if current_user and current_user.is_admin() %}
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createGroupModal">
         <i class="bi bi-plus-circle me-2"></i> Create Group
     </button>
+    {% endif %}
 </div>
 
 <div class="row g-4">

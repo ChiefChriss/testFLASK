@@ -49,6 +49,16 @@
             {% endif %}
           </div>
 
+          {% if task.due_date %}
+          <div class="col-md-6">
+            <h6 class="text-muted mb-2">Due Date</h6>
+            <span class="badge rounded-pill bg-warning text-dark">
+              <i class="bi bi-calendar-event me-1"></i>
+              {{ task.due_date.strftime('%B %d, %Y') }}
+            </span>
+          </div>
+          {% endif %}
+
           {% if task.completed_at %}
           <div class="col-md-6">
             <h6 class="text-muted mb-2">Completed At</h6>

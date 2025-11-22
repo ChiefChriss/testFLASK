@@ -165,7 +165,7 @@
           {% endif %}
 
           <div class="row">
-            <div class="col-md-12 mb-3">
+            <div class="col-md-6 mb-3">
               <label class="form-label">Status</label>
               <select class="form-select" name="status_id">
                 <option value="">-- Default --</option>
@@ -173,6 +173,11 @@
                 <option value="{{ s.id }}">{{ s.label }}</option>
                 {% endfor %}
               </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Due Date (Optional)</label>
+              <input class="form-control" name="due_date" type="date">
             </div>
           </div>
 
