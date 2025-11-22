@@ -10,7 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
-from models import db, User, Employee, Group, UserGroup, TaskStatus, Task, Department, Role, TaskComment
+from models import db, User, Employee, Group, UserGroup, TaskStatus, Task, Department, Role, TaskComment, Notification
 
 
 def create_app():
@@ -79,9 +79,26 @@ def create_app():
     @app.context_processor
     def inject_globals():
         user = None
+        unread_count = 0
         if "user_id" in session:
             user = User.query.get(session["user_id"])
-        return {'now_year': datetime.utcnow().year, 'current_user': user}
+            if user:
+                unread_count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
+        return {'now_year': datetime.utcnow().year, 'current_user': user, 'unread_notifications': unread_count}
+
+    # ---------- helper functions ----------
+    
+    def create_notification(user_id, title, message, notification_type, task_id=None):
+        """Helper function to create notifications"""
+        notif = Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            task_id=task_id,
+            created_at=datetime.utcnow()
+        )
+        db.session.add(notif)
 
     # ---------- auth helpers ----------
     def login_required(f):
@@ -211,6 +228,9 @@ def create_app():
         
         employee_id = generate_employee_id()
         
+        # Check if admin privileges requested
+        is_admin = bool(request.form.get("is_admin"))
+        
         # Create user account
         new_user = User(
             username=username,
@@ -219,6 +239,13 @@ def create_app():
         )
         db.session.add(new_user)
         db.session.flush()  # Get user ID
+
+        # If admin privileges requested, add to Admins group
+        if is_admin:
+            admin_group = Group.query.filter_by(is_admin_group=True).first()
+            if admin_group:
+                ug = UserGroup(user_id=new_user.id, group_id=admin_group.id)
+                db.session.add(ug)
 
         # Create employee
         emp = Employee(
@@ -236,7 +263,8 @@ def create_app():
         db.session.add(emp)
         db.session.commit()
         
-        flash(f"Employee added successfully! Employee ID: {employee_id}, Username: {username}", "success")
+        admin_msg = " with Admin privileges" if is_admin else ""
+        flash(f"Employee added successfully{admin_msg}! Employee ID: {employee_id}, Username: {username}", "success")
         return redirect(url_for("employees"))
 
     @app.route("/employees/<int:employee_id>/edit", methods=["POST"])
@@ -263,8 +291,42 @@ def create_app():
         role_id = request.form.get("role_id")
         emp.role_id = int(role_id) if role_id else None
         
+        # Update user account info if exists
+        if emp.user:
+            new_username = request.form.get("username")
+            if new_username and new_username != emp.user.username:
+                # Check if username already taken
+                existing = User.query.filter_by(username=new_username).first()
+                if existing and existing.id != emp.user.id:
+                    flash("Username already taken. Please choose another.", "danger")
+                    return redirect(url_for("employees"))
+                emp.user.username = new_username
+            
+            # Update account status
+            is_active = request.form.get("is_active")
+            emp.user.is_active = bool(int(is_active)) if is_active else True
+        
         db.session.commit()
         flash(f"Employee {emp.full_name()} updated successfully.", "success")
+        return redirect(url_for("employees"))
+
+    @app.route("/employees/<int:employee_id>/reset_password", methods=["POST"])
+    @admin_required
+    def reset_employee_password(employee_id):
+        emp = Employee.query.get_or_404(employee_id)
+        
+        if not emp.user:
+            flash("Employee does not have a user account.", "danger")
+            return redirect(url_for("employees"))
+        
+        new_password = request.form.get("new_password")
+        if not new_password:
+            flash("Password cannot be empty.", "danger")
+            return redirect(url_for("employees"))
+        
+        emp.user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        flash(f"Password reset successfully for {emp.full_name()}.", "success")
         return redirect(url_for("employees"))
 
     @app.route("/employees/<int:employee_id>/delete", methods=["POST"])
@@ -275,6 +337,46 @@ def create_app():
         db.session.delete(emp)
         db.session.commit()
         flash(f"Employee {emp_name} has been deleted.", "info")
+        return redirect(url_for("employees"))
+
+    @app.route("/employees/<int:employee_id>/toggle_admin", methods=["POST"])
+    @admin_required
+    def toggle_employee_admin(employee_id):
+        emp = Employee.query.get_or_404(employee_id)
+        
+        if not emp.user:
+            flash("Employee must have a user account to grant admin privileges.", "danger")
+            return redirect(url_for("employees"))
+        
+        # Protect System Admin (username: admin or employee_id: EMP-00001)
+        if emp.user.username == "admin" or emp.employee_id == "EMP-00001":
+            flash("Cannot modify System Admin privileges.", "danger")
+            return redirect(url_for("employees"))
+        
+        # Get or create admin group
+        admin_group = Group.query.filter_by(is_admin_group=True).first()
+        if not admin_group:
+            flash("Admin group not found. Please create one first.", "danger")
+            return redirect(url_for("employees"))
+        
+        # Check if user is already admin
+        is_currently_admin = emp.user.is_admin()
+        
+        if is_currently_admin:
+            # Remove from admin group
+            ug = UserGroup.query.filter_by(user_id=emp.user.id, group_id=admin_group.id).first()
+            if ug:
+                db.session.delete(ug)
+                db.session.commit()
+                flash(f"Admin privileges revoked from {emp.full_name()}.", "info")
+        else:
+            # Add to admin group
+            ug = UserGroup.query.filter_by(user_id=emp.user.id, group_id=admin_group.id).first()
+            if not ug:
+                db.session.add(UserGroup(user_id=emp.user.id, group_id=admin_group.id))
+                db.session.commit()
+                flash(f"Admin privileges granted to {emp.full_name()}.", "success")
+        
         return redirect(url_for("employees"))
 
     # ---------- department & role routes ----------
@@ -444,95 +546,6 @@ def create_app():
                 flash("User already in group.", "info")
         return redirect(url_for("groups"))
 
-    # ---------- user management routes ----------
-
-    @app.route("/users")
-    @admin_required
-    def users():
-        all_users = User.query.all()
-        employees = Employee.query.all()
-        return render_template("users.html", users=all_users, employees=employees)
-
-    @app.route("/users/add", methods=["POST"])
-    @admin_required
-    def add_user():
-        username = request.form.get("username")
-        password = request.form.get("password") or "password123"
-        employee_id = request.form.get("employee_id") or None
-        is_active = bool(request.form.get("is_active"))
-
-        # Check if username already exists
-        if User.query.filter_by(username=username).first():
-            flash("Username already exists.", "danger")
-            return redirect(url_for("users"))
-
-        new_user = User(
-            username=username,
-            password_hash=generate_password_hash(password),
-            is_active=is_active
-        )
-        db.session.add(new_user)
-        db.session.flush()
-
-        # Link to employee if provided
-        if employee_id:
-            emp = Employee.query.get(employee_id)
-            if emp:
-                emp.user = new_user
-
-        db.session.commit()
-        flash(f"User '{username}' created successfully.", "success")
-        return redirect(url_for("users"))
-
-    @app.route("/users/<int:user_id>/edit", methods=["POST"])
-    @admin_required
-    def edit_user(user_id):
-        user = User.query.get_or_404(user_id)
-        user.username = request.form.get("username")
-        user.is_active = bool(request.form.get("is_active"))
-        
-        employee_id = request.form.get("employee_id")
-        
-        # Unlink previous employee if any
-        if user.employee:
-            user.employee.user = None
-        
-        # Link to new employee
-        if employee_id:
-            emp = Employee.query.get(employee_id)
-            if emp:
-                emp.user = user
-        
-        db.session.commit()
-        flash(f"User '{user.username}' updated successfully.", "success")
-        return redirect(url_for("users"))
-
-    @app.route("/users/<int:user_id>/reset_password", methods=["POST"])
-    @admin_required
-    def reset_password(user_id):
-        user = User.query.get_or_404(user_id)
-        new_password = request.form.get("new_password")
-        user.password_hash = generate_password_hash(new_password)
-        db.session.commit()
-        flash(f"Password reset for '{user.username}'.", "success")
-        return redirect(url_for("users"))
-
-    @app.route("/users/<int:user_id>/delete", methods=["POST"])
-    @admin_required
-    def delete_user(user_id):
-        user = User.query.get_or_404(user_id)
-        
-        # Don't allow deleting admin users
-        if user.is_admin():
-            flash("Cannot delete admin users.", "danger")
-            return redirect(url_for("users"))
-        
-        username = user.username
-        db.session.delete(user)
-        db.session.commit()
-        flash(f"User '{username}' has been deleted.", "info")
-        return redirect(url_for("users"))
-
     # ---------- task status routes ----------
 
     @app.route("/statuses")
@@ -589,7 +602,23 @@ def create_app():
     @app.route("/tasks")
     @login_required
     def tasks():
-        tasks = Task.query.order_by(Task.created_at.desc()).all()
+        user = User.query.get(session["user_id"])
+        
+        # Admins see all tasks
+        if user.is_admin():
+            tasks = Task.query.order_by(Task.created_at.desc()).all()
+        else:
+            # Regular employees only see:
+            # 1. Tasks assigned to them directly
+            # 2. Tasks assigned to groups they belong to
+            # 3. Tasks they created
+            group_ids = [g.id for g in user.groups]
+            tasks = Task.query.filter(
+                (Task.assigned_user_id == user.id) |
+                (Task.assigned_group_id.in_(group_ids)) |
+                (Task.created_by_user_id == user.id)
+            ).order_by(Task.created_at.desc()).all()
+        
         users = User.query.all()
         groups = Group.query.all()
         statuses = TaskStatus.query.all()
@@ -634,6 +663,33 @@ def create_app():
             created_at=datetime.utcnow()
         )
         db.session.add(task)
+        db.session.flush()  # Get task ID
+        
+        # Create notifications
+        # 1. Notify assigned user
+        if assigned_user_id and assigned_user_id != user.id:
+            create_notification(
+                assigned_user_id,
+                "New Task Assigned",
+                f"You have been assigned to task: {title}",
+                "task_assigned",
+                task.id
+            )
+        
+        # 2. Notify group members
+        if assigned_group_id:
+            group = Group.query.get(assigned_group_id)
+            if group:
+                for member in group.users:
+                    if member.id != user.id:  # Don't notify creator
+                        create_notification(
+                            member.id,
+                            "New Group Task",
+                            f"New task for {group.name}: {title}",
+                            "group_task",
+                            task.id
+                        )
+        
         db.session.commit()
         flash("Task created.", "success")
         return redirect(url_for("tasks"))
@@ -641,14 +697,40 @@ def create_app():
     @app.route("/tasks/<int:task_id>/update_status", methods=["POST"])
     @login_required
     def update_task_status(task_id):
+        user = User.query.get(session["user_id"])
         status_id = request.form.get("status_id")
         task = Task.query.get_or_404(task_id)
+        old_status = task.status.label if task.status else "None"
         task.status_id = status_id
 
         # if marked complete, set completed_at
         status = TaskStatus.query.get(status_id)
         if status and status.label.lower() == "complete":
             task.completed_at = datetime.utcnow()
+        
+        # Notify relevant users about status change
+        new_status_label = status.label if status else "Unknown"
+        
+        # Notify task creator if they didn't make the change
+        if task.created_by_user_id != user.id:
+            create_notification(
+                task.created_by_user_id,
+                "Task Status Changed",
+                f"Task '{task.title}' status changed from {old_status} to {new_status_label}",
+                "status_changed",
+                task.id
+            )
+        
+        # Notify assignee if they didn't make the change
+        if task.assigned_user_id and task.assigned_user_id != user.id:
+            create_notification(
+                task.assigned_user_id,
+                "Task Status Changed",
+                f"Task '{task.title}' status changed to {new_status_label}",
+                "status_changed",
+                task.id
+            )
+        
         db.session.commit()
         flash("Task status updated.", "success")
         return redirect(url_for("tasks"))
@@ -701,6 +783,45 @@ def create_app():
             created_at=datetime.utcnow()
         )
         db.session.add(comment)
+        
+        # Notify relevant users about new comment
+        notified_users = set()
+        
+        # Notify task creator
+        if task.created_by_user_id != user.id:
+            create_notification(
+                task.created_by_user_id,
+                "New Comment",
+                f"{user.username} commented on '{task.title}'",
+                "comment_added",
+                task.id
+            )
+            notified_users.add(task.created_by_user_id)
+        
+        # Notify assignee
+        if task.assigned_user_id and task.assigned_user_id != user.id and task.assigned_user_id not in notified_users:
+            create_notification(
+                task.assigned_user_id,
+                "New Comment",
+                f"{user.username} commented on '{task.title}'",
+                "comment_added",
+                task.id
+            )
+            notified_users.add(task.assigned_user_id)
+        
+        # Notify group members
+        if task.assigned_group:
+            for member in task.assigned_group.users:
+                if member.id != user.id and member.id not in notified_users:
+                    create_notification(
+                        member.id,
+                        "New Comment",
+                        f"{user.username} commented on group task '{task.title}'",
+                        "comment_added",
+                        task.id
+                    )
+                    notified_users.add(member.id)
+        
         db.session.commit()
         flash("Comment added successfully.", "success")
         return redirect(url_for("view_task", task_id=task_id))
@@ -750,6 +871,42 @@ def create_app():
         db.session.commit()
         flash(f"Task '{task_title}' has been deleted.", "info")
         return redirect(url_for("tasks"))
+
+    # ---------- notification routes ----------
+
+    @app.route("/notifications")
+    @login_required
+    def notifications():
+        user = User.query.get(session["user_id"])
+        all_notifications = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).all()
+        return render_template("notifications.html", notifications=all_notifications)
+
+    @app.route("/notifications/<int:notif_id>/mark_read", methods=["POST"])
+    @login_required
+    def mark_notification_read(notif_id):
+        notif = Notification.query.get_or_404(notif_id)
+        user = User.query.get(session["user_id"])
+        
+        if notif.user_id != user.id:
+            flash("Unauthorized.", "danger")
+            return redirect(url_for("notifications"))
+        
+        notif.is_read = True
+        db.session.commit()
+        
+        # If notification has a task, redirect to it
+        if notif.task_id:
+            return redirect(url_for("view_task", task_id=notif.task_id))
+        return redirect(url_for("notifications"))
+
+    @app.route("/notifications/mark_all_read", methods=["POST"])
+    @login_required
+    def mark_all_notifications_read():
+        user = User.query.get(session["user_id"])
+        Notification.query.filter_by(user_id=user.id, is_read=False).update({Notification.is_read: True})
+        db.session.commit()
+        flash("All notifications marked as read.", "success")
+        return redirect(url_for("notifications"))
 
     return app
 

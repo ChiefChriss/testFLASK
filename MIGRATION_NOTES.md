@@ -12,6 +12,15 @@ A new `TaskComment` model has been added to support Jira-style commenting on tas
 - **User Account Required**: All new employees must have a username and password
 - **Auto-Generated IDs**: Format `EMP-XXXXX` (e.g., EMP-12345)
 
+### 3. In-App Notifications System
+
+A new `Notification` model has been added for real-time user notifications.
+
+- **Notification Types**: task_assigned, status_changed, comment_added, group_task
+- **Bell Icon**: Shows unread count in navbar
+- **Dropdown**: Recent 5 notifications with quick actions
+- **Full Page**: View all notifications at `/notifications`
+
 ### To apply the changes:
 
 1. **Backup your database** (if you have important data):

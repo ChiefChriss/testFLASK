@@ -21,6 +21,7 @@ class User(db.Model):
     employee = db.relationship("Employee", back_populates="user", uselist=False)
     groups = db.relationship("Group", secondary="user_groups", back_populates="users")
     created_tasks = db.relationship("Task", back_populates="creator", foreign_keys="Task.created_by_user_id")
+    notifications = db.relationship("Notification", back_populates="user", order_by="Notification.created_at.desc()")
 
     def is_admin(self):
         # Admin if in any group marked as admin
@@ -141,3 +142,19 @@ class TaskComment(db.Model):
 
     task = db.relationship("Task", back_populates="comments")
     user = db.relationship("User")
+
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    notification_type = db.Column(db.String(50))  # task_assigned, status_changed, comment_added, group_task
+    task_id = db.Column(db.Integer, db.ForeignKey("tasks.id"), nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    user = db.relationship("User")
+    task = db.relationship("Task")
