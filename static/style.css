@@ -266,6 +266,10 @@ body.dark-mode .footer {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+body.dark-mode .footer .text-muted,
+body.dark-mode .footer small {
     color: #b3b3b3 !important;
 }
 
@@ -540,4 +544,14 @@ body.dark-mode .stat-card .text-success {
 
 body.dark-mode .stat-card .text-warning {
     color: #ffda6a !important;
+}
+
+/* Welcome message visibility in dark mode */
+body.dark-mode .text-muted {
+    color: #b0b3b8 !important;
+}
+
+body.dark-mode .text-muted strong {
+    color: #e4e6e7 !important;
+    font-weight: 600;
 }
