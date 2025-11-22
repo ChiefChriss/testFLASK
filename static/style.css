@@ -2,13 +2,18 @@
       BASE / LIGHT MODE
    ===================================== */
 
-   body {
+body {
     font-family: 'Inter', sans-serif;
     background-color: #f8f9fa;
     color: #343a40;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-weight: 600;
     color: #212529;
 }
@@ -56,7 +61,8 @@ h1, h2, h3, h4, h5, h6 {
     color: #6c757d;
 }
 
-.form-control:focus, .form-select:focus {
+.form-control:focus,
+.form-select:focus {
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
     border-color: #86b7fe;
 }
@@ -87,25 +93,13 @@ body.dark-mode .stat-card:hover {
     box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Keep dashboard stat icons colored in dark mode */
-body.dark-mode .text-primary {
-    color: #0d6efd !important;
+/* Clickable table rows */
+tr[style*="cursor: pointer"]:hover {
+    background-color: rgba(13, 110, 253, 0.05) !important;
 }
 
-body.dark-mode .text-success {
-    color: #198754 !important;
-}
-
-body.dark-mode .text-warning {
-    color: #ffc107 !important;
-}
-
-body.dark-mode .text-danger {
-    color: #dc3545 !important;
-}
-
-body.dark-mode .text-info {
-    color: #0dcaf0 !important;
+body.dark-mode tr[style*="cursor: pointer"]:hover {
+    background-color: rgba(30, 126, 255, 0.1) !important;
 }
 
 
@@ -115,9 +109,18 @@ body.dark-mode .text-info {
    ============================================================ */
 
 /* Smooth transition for EVERYTHING */
-body, .card, .navbar, .footer, .table, .modal-content,
-.form-control, .form-select, .dropdown-menu, .badge,
-.nav-link, .btn {
+body,
+.card,
+.navbar,
+.footer,
+.table,
+.modal-content,
+.form-control,
+.form-select,
+.dropdown-menu,
+.badge,
+.nav-link,
+.btn {
     transition: background-color .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease;
 }
 
@@ -141,7 +144,7 @@ body.dark-mode .navbar {
     background-color: rgba(23, 23, 25, 0.55) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-color: rgba(255,255,255,0.06) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 body.dark-mode .navbar-brand {
@@ -155,7 +158,7 @@ body.dark-mode .navbar .nav-link {
 }
 
 body.dark-mode .navbar .nav-link:hover {
-    background-color: rgba(30,126,255,0.15) !important;
+    background-color: rgba(30, 126, 255, 0.15) !important;
     color: #66aaff !important;
 }
 
@@ -169,7 +172,7 @@ body.dark-mode .footer {
     background-color: rgba(23, 23, 25, 0.55) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-color: rgba(255,255,255,0.06) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
     color: #b3b3b3 !important;
 }
 
@@ -178,14 +181,14 @@ body.dark-mode .card,
 body.dark-mode .modal-content {
     background-color: rgba(30, 30, 32, 0.60) !important;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
     color: #e6e6e6 !important;
-    box-shadow: 0 0 25px rgba(0,0,0,0.35);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.35);
 }
 
 body.dark-mode .card-header {
     background-color: rgba(30, 30, 32, 0.75) !important;
-    border-bottom-color: rgba(255,255,255,0.06) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 /* Kanban cards (task cards) */
@@ -193,7 +196,7 @@ body.dark-mode .task-card,
 body.dark-mode .kanban-card {
     background-color: rgba(28, 28, 30, 0.70) !important;
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Neon Accent Outline on Hover */
@@ -201,7 +204,7 @@ body.dark-mode .card:hover,
 body.dark-mode .task-card:hover,
 body.dark-mode .kanban-card:hover {
     border-color: #1e7eff !important;
-    box-shadow: 0 0 22px rgba(30,126,255,0.25);
+    box-shadow: 0 0 22px rgba(30, 126, 255, 0.25);
 }
 
 /* Force card inner text readable */
@@ -258,23 +261,47 @@ body.dark-mode .empty-icon {
 
 /* FORMS — modern dark inputs */
 body.dark-mode .form-control,
-body.dark-mode .form-select {
+body.dark-mode .form-select,
+body.dark-mode textarea.form-control {
     background-color: rgba(38, 38, 40, 0.85) !important;
-    border-color: rgba(255,255,255,0.08) !important;
-    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f8f9fa !important;
+    font-weight: 400 !important;
+}
+
+body.dark-mode .form-control::placeholder {
+    color: #8a8d91 !important;
+    opacity: 1;
 }
 
 body.dark-mode .form-control:focus,
 body.dark-mode .form-select:focus {
     background-color: rgba(48, 48, 52, 0.95) !important;
     border-color: #1e7eff !important;
-    box-shadow: 0 0 0 3px rgba(30,126,255,0.25);
+    box-shadow: 0 0 0 3px rgba(30, 126, 255, 0.25);
+    color: #ffffff !important;
+}
+
+/* Input group text (like $ symbol) */
+body.dark-mode .input-group-text {
+    background-color: rgba(38, 38, 40, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f8f9fa !important;
+}
+
+/* Form labels */
+body.dark-mode .form-label {
+    color: #e6e6e6 !important;
+}
+
+body.dark-mode .form-text {
+    color: #b0b3b8 !important;
 }
 
 /* DROPDOWNS */
 body.dark-mode .dropdown-menu {
     background-color: rgba(29, 29, 31, 0.95) !important;
-    border-color: rgba(255,255,255,0.08) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
     color: #e6e6e6 !important;
 }
 
@@ -290,7 +317,7 @@ body.dark-mode .dropdown-item:hover {
 /* ALERTS */
 body.dark-mode .alert {
     background-color: rgba(36, 37, 40, 0.95) !important;
-    border-color: rgba(255,255,255,0.08) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
     color: #f1f3f4 !important;
 }
 
@@ -301,13 +328,13 @@ body.dark-mode .btn-primary {
 }
 
 body.dark-mode .btn-primary:hover {
-    box-shadow: 0 0 12px rgba(30,126,255,.55);
+    box-shadow: 0 0 12px rgba(30, 126, 255, .55);
 }
 
 body.dark-mode .btn-light {
-    background-color: rgba(255,255,255,0.15) !important;
+    background-color: rgba(255, 255, 255, 0.15) !important;
     color: #ffffff !important;
-    border-color: rgba(255,255,255,0.18) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
 }
 
 /* Outline toggle button */
@@ -324,7 +351,7 @@ body.dark-mode .btn-outline-secondary:hover {
 /* BADGES — keep original colors, add soft glow */
 body.dark-mode .badge {
     border: none !important;
-    box-shadow: 0 0 6px rgba(0,0,0,0.35);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
 }
 
 body.dark-mode .badge.bg-light {
@@ -335,31 +362,31 @@ body.dark-mode .badge.bg-light {
 body.dark-mode .badge.bg-primary {
     background-color: #0d6efd !important;
     color: #fff !important;
-    box-shadow: 0 0 8px rgba(13,110,253,0.45);
+    box-shadow: 0 0 8px rgba(13, 110, 253, 0.45);
 }
 
 body.dark-mode .badge.bg-info {
     background-color: #17a2b8 !important;
     color: #fff !important;
-    box-shadow: 0 0 8px rgba(23,162,184,0.45);
+    box-shadow: 0 0 8px rgba(23, 162, 184, 0.45);
 }
 
 body.dark-mode .badge.bg-warning {
     background-color: #ffc107 !important;
     color: #2b2b2b !important;
-    box-shadow: 0 0 8px rgba(255,193,7,0.45);
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.45);
 }
 
 body.dark-mode .badge.bg-success {
     background-color: #28a745 !important;
     color: #fff !important;
-    box-shadow: 0 0 8px rgba(40,167,69,0.45);
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.45);
 }
 
 body.dark-mode .badge.bg-danger {
     background-color: #dc3545 !important;
     color: #fff !important;
-    box-shadow: 0 0 8px rgba(220,53,69,0.45);
+    box-shadow: 0 0 8px rgba(220, 53, 69, 0.45);
 }
 
 body.dark-mode .badge.bg-secondary {
@@ -390,4 +417,34 @@ body.dark-mode .navbar-brand .bi {
 
 body.dark-mode .nav-link.active .bi {
     color: #ffffff !important;
+}
+
+/* =====================================
+   DASHBOARD SPECIFIC OVERRIDES
+   ===================================== */
+
+/* Restore colored borders in dark mode for stat cards */
+body.dark-mode .stat-card.border-primary {
+    border-left-color: #0d6efd !important;
+}
+
+body.dark-mode .stat-card.border-success {
+    border-left-color: #198754 !important;
+}
+
+body.dark-mode .stat-card.border-warning {
+    border-left-color: #ffc107 !important;
+}
+
+/* Restore colored text/icons in dark mode */
+body.dark-mode .stat-card .text-primary {
+    color: #6ea8fe !important;
+}
+
+body.dark-mode .stat-card .text-success {
+    color: #75b798 !important;
+}
+
+body.dark-mode .stat-card .text-warning {
+    color: #ffda6a !important;
 }
