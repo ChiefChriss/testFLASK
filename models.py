@@ -51,6 +51,7 @@ class Employee(db.Model):
     __tablename__ = "employees"
 
     id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.String(20), unique=True, nullable=False)  # Random employee ID
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
     address = db.Column(db.Text)
@@ -112,3 +113,31 @@ class Task(db.Model):
     assignee = db.relationship("User", foreign_keys=[assigned_user_id])
     assigned_group = db.relationship("Group", back_populates="tasks")
     creator = db.relationship("User", back_populates="created_tasks", foreign_keys=[created_by_user_id])
+    comments = db.relationship("TaskComment", back_populates="task", order_by="TaskComment.created_at", cascade="all, delete-orphan")
+
+    def can_comment(self, user):
+        """Check if user can comment on this task"""
+        if user.is_admin():
+            return True
+        if self.created_by_user_id == user.id:
+            return True
+        if self.assigned_user_id == user.id:
+            return True
+        # Check if user is in assigned group
+        if self.assigned_group and user in self.assigned_group.users:
+            return True
+        return False
+
+
+class TaskComment(db.Model):
+    __tablename__ = "task_comments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("tasks.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+    updated_at = db.Column(db.DateTime)
+
+    task = db.relationship("Task", back_populates="comments")
+    user = db.relationship("User")

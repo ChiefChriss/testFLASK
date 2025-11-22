@@ -10,7 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
-from models import db, User, Employee, Group, UserGroup, TaskStatus, Task, Department, Role
+from models import db, User, Employee, Group, UserGroup, TaskStatus, Task, Department, Role, TaskComment
 
 
 def create_app():
@@ -21,6 +21,9 @@ def create_app():
     @app.cli.command("init-db")
     def init_db():
         """Initialize database and seed default data."""
+        import random
+        import string
+        
         with app.app_context():
             db.drop_all()
             db.create_all()
@@ -45,8 +48,9 @@ def create_app():
             db.session.add(admin_user)
             db.session.flush()  # to get id
 
-            # Employee tied to admin user
+            # Employee tied to admin user with generated employee_id
             admin_emp = Employee(
+                employee_id="EMP-00001",  # Fixed ID for admin
                 first_name="System",
                 last_name="Admin",
                 department=dept,
@@ -70,6 +74,7 @@ def create_app():
 
             db.session.commit()
             print("Database initialized. Admin login: admin / admin123")
+            print("Admin Employee ID: EMP-00001")
 
     @app.context_processor
     def inject_globals():
@@ -133,6 +138,13 @@ def create_app():
     @login_required
     def dashboard():
         user = User.query.get(session["user_id"])
+        
+        # If user doesn't exist (deleted), clear session and redirect to login
+        if not user:
+            session.clear()
+            flash("Your account no longer exists. Please contact an administrator.", "danger")
+            return redirect(url_for("login"))
+        
         # Tasks assigned directly to user OR to groups they belong to
         my_tasks = Task.query.filter(
             (Task.assigned_user_id == user.id) |
@@ -164,6 +176,9 @@ def create_app():
     @app.route("/employees/add", methods=["POST"])
     @admin_required
     def add_employee():
+        import random
+        import string
+        
         first_name = request.form.get("first_name")
         last_name = request.form.get("last_name")
         address = request.form.get("address")
@@ -172,8 +187,42 @@ def create_app():
         date_of_birth = request.form.get("date_of_birth") or None
         department_id = request.form.get("department_id") or None
         role_id = request.form.get("role_id") or None
+        
+        # Get username and password
+        username = request.form.get("username")
+        password = request.form.get("password") or "password123"
+        
+        # Validate username
+        if not username:
+            flash("Username is required.", "danger")
+            return redirect(url_for("employees"))
+        
+        # Check if username already exists
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists. Please choose a different username.", "danger")
+            return redirect(url_for("employees"))
+        
+        # Generate unique employee ID (e.g., EMP-12345)
+        def generate_employee_id():
+            while True:
+                emp_id = f"EMP-{''.join(random.choices(string.digits, k=5))}"
+                if not Employee.query.filter_by(employee_id=emp_id).first():
+                    return emp_id
+        
+        employee_id = generate_employee_id()
+        
+        # Create user account
+        new_user = User(
+            username=username,
+            password_hash=generate_password_hash(password),
+            is_active=True
+        )
+        db.session.add(new_user)
+        db.session.flush()  # Get user ID
 
+        # Create employee
         emp = Employee(
+            employee_id=employee_id,
             first_name=first_name,
             last_name=last_name,
             address=address,
@@ -181,11 +230,13 @@ def create_app():
             date_of_hire=datetime.strptime(date_of_hire, "%Y-%m-%d") if date_of_hire else None,
             date_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d") if date_of_birth else None,
             department_id=department_id,
-            role_id=role_id
+            role_id=role_id,
+            user_id=new_user.id
         )
         db.session.add(emp)
         db.session.commit()
-        flash("Employee added.", "success")
+        
+        flash(f"Employee added successfully! Employee ID: {employee_id}, Username: {username}", "success")
         return redirect(url_for("employees"))
 
     @app.route("/employees/<int:employee_id>/edit", methods=["POST"])
@@ -614,6 +665,90 @@ def create_app():
         task.completed_at = datetime.utcnow()
         db.session.commit()
         flash("Task marked complete.", "success")
+        return redirect(url_for("tasks"))
+
+    # ---------- task comment routes ----------
+
+    @app.route("/tasks/<int:task_id>/view")
+    @login_required
+    def view_task(task_id):
+        task = Task.query.get_or_404(task_id)
+        user = User.query.get(session["user_id"])
+        can_comment = task.can_comment(user)
+        statuses = TaskStatus.query.all()
+        return render_template("task_detail.html", task=task, can_comment=can_comment, statuses=statuses)
+
+    @app.route("/tasks/<int:task_id>/comment", methods=["POST"])
+    @login_required
+    def add_task_comment(task_id):
+        task = Task.query.get_or_404(task_id)
+        user = User.query.get(session["user_id"])
+        
+        # Check permission
+        if not task.can_comment(user):
+            flash("You don't have permission to comment on this task.", "danger")
+            return redirect(url_for("view_task", task_id=task_id))
+        
+        content = request.form.get("content")
+        if not content or not content.strip():
+            flash("Comment cannot be empty.", "warning")
+            return redirect(url_for("view_task", task_id=task_id))
+        
+        comment = TaskComment(
+            task_id=task_id,
+            user_id=user.id,
+            content=content.strip(),
+            created_at=datetime.utcnow()
+        )
+        db.session.add(comment)
+        db.session.commit()
+        flash("Comment added successfully.", "success")
+        return redirect(url_for("view_task", task_id=task_id))
+
+    @app.route("/tasks/<int:task_id>/comment/<int:comment_id>/edit", methods=["POST"])
+    @login_required
+    def edit_task_comment(task_id, comment_id):
+        comment = TaskComment.query.get_or_404(comment_id)
+        user = User.query.get(session["user_id"])
+        
+        # Only comment author or admin can edit
+        if comment.user_id != user.id and not user.is_admin():
+            flash("You don't have permission to edit this comment.", "danger")
+            return redirect(url_for("view_task", task_id=task_id))
+        
+        content = request.form.get("content")
+        if content and content.strip():
+            comment.content = content.strip()
+            comment.updated_at = datetime.utcnow()
+            db.session.commit()
+            flash("Comment updated successfully.", "success")
+        
+        return redirect(url_for("view_task", task_id=task_id))
+
+    @app.route("/tasks/<int:task_id>/comment/<int:comment_id>/delete", methods=["POST"])
+    @login_required
+    def delete_task_comment(task_id, comment_id):
+        comment = TaskComment.query.get_or_404(comment_id)
+        user = User.query.get(session["user_id"])
+        
+        # Only comment author or admin can delete
+        if comment.user_id != user.id and not user.is_admin():
+            flash("You don't have permission to delete this comment.", "danger")
+            return redirect(url_for("view_task", task_id=task_id))
+        
+        db.session.delete(comment)
+        db.session.commit()
+        flash("Comment deleted successfully.", "info")
+        return redirect(url_for("view_task", task_id=task_id))
+
+    @app.route("/tasks/<int:task_id>/delete", methods=["POST"])
+    @admin_required
+    def delete_task(task_id):
+        task = Task.query.get_or_404(task_id)
+        task_title = task.title
+        db.session.delete(task)
+        db.session.commit()
+        flash(f"Task '{task_title}' has been deleted.", "info")
         return redirect(url_for("tasks"))
 
     return app
