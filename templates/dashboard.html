@@ -92,8 +92,8 @@
                   </td>
                   <td>
                       <span class="badge rounded-pill 
-                        {% if t.status.label == 'Complete' %}bg-success
-                        {% elif t.status.label == 'In-Progress' %}bg-warning text-dark
+                        {% if t.status and t.status.is_complete %}bg-success
+                        {% elif t.status and t.status.label == 'In-Progress' %}bg-warning text-dark
                         {% else %}bg-secondary{% endif %}">
                         {{ t.status.label if t.status else 'None' }}
                       </span>

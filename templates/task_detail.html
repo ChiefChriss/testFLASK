@@ -27,8 +27,8 @@
           <div class="col-md-6">
             <h6 class="text-muted mb-2">Status</h6>
             <span class="badge rounded-pill 
-              {% if task.status.label == 'Complete' %}bg-success
-              {% elif task.status.label == 'In-Progress' %}bg-warning text-dark
+              {% if task.status and task.status.is_complete %}bg-success
+              {% elif task.status and task.status.label == 'In-Progress' %}bg-warning text-dark
               {% else %}bg-secondary{% endif %} px-3 py-2">
               {{ task.status.label if task.status else 'None' }}
             </span>

@@ -30,8 +30,8 @@
         {% for t in tasks %}
         {% if t.status_id == status.id %}
         <div class="card mb-3 shadow-sm border-0 task-card draggable-task" draggable="true" data-task-id="{{ t.id }}"
-          data-current-status="{{ status.id }}" style="cursor: pointer;" 
-          onclick="window.location.href='{{ url_for('view_task', task_id=t.id) }}'">
+          data-current-status="{{ status.id }}" style="cursor: move;" 
+          data-task-url="{{ url_for('view_task', task_id=t.id) }}">
           <div class="card-body p-3">
             <div class="d-flex justify-content-between mb-2">
               <h6 class="card-title mb-0 fw-bold text-truncate" title="{{ t.title }}">
@@ -42,7 +42,7 @@
                   </span>
                 {% endif %}
               </h6>
-              {% if t.status.label == 'Complete' %}
+              {% if t.status and t.status.is_complete %}
               <i class="bi bi-check-circle-fill text-success"></i>
               {% endif %}
             </div>
@@ -193,6 +193,82 @@
   </div>
 </div>
 
+<!-- Toast Container -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+  <div id="taskToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <i class="bi bi-check-circle-fill text-success me-2"></i>
+      <strong class="me-auto">Task Updated</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toastMessage"></div>
+  </div>
+</div>
+
+<!-- Live Kanban Updates with SocketIO -->
+<script>
+  // Toast notification function
+  function showToast(message, type = 'success') {
+    const toastEl = document.getElementById('taskToast');
+    const toastMessage = document.getElementById('toastMessage');
+    const toastHeader = toastEl.querySelector('.toast-header');
+    
+    // Update message
+    toastMessage.textContent = message;
+    
+    // Update icon based on type
+    const icon = toastHeader.querySelector('i');
+    if (type === 'success') {
+      icon.className = 'bi bi-check-circle-fill text-success me-2';
+    } else if (type === 'error') {
+      icon.className = 'bi bi-x-circle-fill text-danger me-2';
+    } else {
+      icon.className = 'bi bi-info-circle-fill text-info me-2';
+    }
+    
+    // Show toast
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toast.show();
+  }
+
+  // Initialize SocketIO connection for live updates
+  const kanbanSocket = io();
+  
+  // Listen for task_moved events
+  kanbanSocket.on('task_moved', function(data) {
+    const taskCard = document.querySelector(`[data-task-id="${data.task_id}"]`);
+    if (taskCard) {
+      const targetColumn = document.querySelector(`[data-status-id="${data.new_status_id}"]`);
+      if (targetColumn) {
+        // Update the card's current status
+        taskCard.dataset.currentStatus = data.new_status_id;
+        
+        // Move the card to the new column
+        targetColumn.appendChild(taskCard);
+        
+        // Update task count badges
+        updateTaskCounts();
+        
+        // Show toast notification
+        showToast(`Task "${data.task_title}" moved to ${data.status_label}!`, 'success');
+      }
+    }
+  });
+
+  // Function to update task count badges
+  function updateTaskCounts() {
+    const dropZones = document.querySelectorAll('.kanban-drop-zone');
+    dropZones.forEach(zone => {
+      const statusId = zone.dataset.statusId;
+      const taskCount = zone.querySelectorAll('.task-card').length;
+      const badge = zone.closest('.card').querySelector('.badge');
+      if (badge) {
+        badge.textContent = taskCount;
+      }
+    });
+  }
+</script>
+
 <!-- Drag and Drop JavaScript -->
 <script>
   (function () {
@@ -224,6 +300,14 @@
           zone.classList.remove('drag-over');
         });
       });
+      
+      // Handle click to navigate
+      task.addEventListener('click', function (e) {
+        // Only navigate if not dragging (check if opacity is normal)
+        if (this.style.opacity !== '0.4' && this.dataset.taskUrl) {
+          window.location.href = this.dataset.taskUrl;
+        }
+      });
     });
 
     // Add drop zone event listeners
@@ -254,25 +338,56 @@
 
         // Only update if dropped in a different column
         if (sourceStatusId !== targetStatusId && draggedTaskId) {
+          // Get status label for toast
+          const statusLabel = this.closest('.card').querySelector('h6').textContent.trim();
+          
+          // Move card immediately for better UX (optimistic update)
+          if (draggedTask && draggedTask.parentNode !== this) {
+            this.appendChild(draggedTask);
+            draggedTask.dataset.currentStatus = targetStatusId;
+            updateTaskCounts();
+          }
+          
           // Send AJAX request to update task status
           fetch(`/tasks/${draggedTaskId}/update_status`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Requested-With': 'XMLHttpRequest'
             },
+            credentials: 'include',
             body: `status_id=${targetStatusId}`
           })
             .then(response => {
               if (response.ok) {
-                // Reload page to show updated board
-                window.location.reload();
+                return response.json();
+              } else if (response.status === 401) {
+                // Authentication error - redirect to login
+                window.location.href = '/login';
+                throw new Error('Session expired. Please log in again.');
               } else {
-                alert('Failed to update task status');
+                return response.json().then(data => {
+                  throw new Error(data.error || 'Failed to update task status');
+                }).catch(() => {
+                  throw new Error('Failed to update task status');
+                });
               }
             })
+            .then(data => {
+              // Success - show toast
+              showToast(`Task moved to ${statusLabel}!`, 'success');
+            })
             .catch(error => {
-              console.error('Error:', error);
-              alert('An error occurred while updating the task');
+              console.error('Error updating task status:', error);
+              // Revert on error (unless it's an auth error which redirects)
+              if (error.message && !error.message.includes('Session expired')) {
+                if (originalColumn && draggedTask) {
+                  originalColumn.appendChild(draggedTask);
+                  draggedTask.dataset.currentStatus = sourceStatusId;
+                  updateTaskCounts();
+                }
+                showToast(error.message || 'Failed to update task status', 'error');
+              }
             });
         }
 
