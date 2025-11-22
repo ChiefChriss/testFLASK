@@ -17,21 +17,24 @@
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-4">ID</th>
-            <th>Name</th>
-            <th>Department</th>
-            <th>Role</th>
-            <th>Salary</th>
-            <th>Date of Hire</th>
-            <th class="text-end pe-4">Actions</th>
-          </tr>
-        </thead>
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">Employee ID</th>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Department</th>
+                  <th>Role</th>
+                  <th>Salary</th>
+                  <th>Date of Hire</th>
+                  <th class="text-end pe-4">Actions</th>
+                </tr>
+              </thead>
         <tbody>
           {% for e in employees %}
           <tr>
-            <td class="ps-4 text-muted small">#{{ e.id }}</td>
+            <td class="ps-4">
+              <span class="badge rounded-pill bg-primary">{{ e.employee_id }}</span>
+            </td>
 
             <td class="fw-medium">
               <div class="d-flex align-items-center">
@@ -42,6 +45,19 @@
                 </div>
                 <div>{{ e.full_name() }}</div>
               </div>
+            </td>
+
+            <td>
+              {% if e.user %}
+              <span class="badge rounded-pill bg-success">{{ e.user.username }}</span>
+              {% if e.user.is_admin() %}
+                <span class="badge rounded-pill bg-danger ms-1">
+                  <i class="bi bi-shield-check"></i>
+                </span>
+              {% endif %}
+              {% else %}
+              <span class="text-muted fst-italic">No account</span>
+              {% endif %}
             </td>
 
             <td>
@@ -85,7 +101,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="7" class="text-center py-4 text-muted">No employees found.</td>
+            <td colspan="8" class="text-center py-4 text-muted">No employees found.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -158,12 +174,53 @@
                 {% endfor %}
               </select>
             </div>
+
+            <div class="col-12">
+              <hr class="my-3">
+              <h6 class="text-muted mb-3">
+                <i class="bi bi-person-lock me-2"></i>User Account Credentials
+              </h6>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Username <span class="text-danger">*</span></label>
+              <input class="form-control" name="username" placeholder="e.g., john.doe" required>
+              <div class="form-text">Used for logging into the system</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Password <span class="text-danger">*</span></label>
+              <input class="form-control" name="password" type="password" placeholder="Enter password" required>
+              <div class="form-text">Minimum 6 characters recommended</div>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" name="is_admin" value="1" id="isAdminCheck">
+                <label class="form-check-label" for="isAdminCheck">
+                  <strong>Grant Admin Privileges</strong>
+                </label>
+              </div>
+              <div class="form-text mb-3">
+                <i class="bi bi-shield-check me-1"></i>
+                Admin users can manage employees, groups, statuses, and see all tasks.
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Note:</strong> A unique Employee ID will be automatically generated (e.g., EMP-12345)
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add Employee</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-person-plus me-2"></i> Add Employee
+          </button>
         </div>
       </form>
     </div>
@@ -188,7 +245,14 @@
               <span class="fw-bold">{{ e.first_name[0] }}{{ e.last_name[0] }}</span>
             </div>
             <h4 class="mt-3 mb-0">{{ e.full_name() }}</h4>
-            <p class="text-muted">Employee ID: #{{ e.id }}</p>
+            <p class="text-muted">
+              <span class="badge rounded-pill bg-primary">{{ e.employee_id }}</span>
+              {% if e.user and e.user.is_admin() %}
+                <span class="badge rounded-pill bg-danger ms-2">
+                  <i class="bi bi-shield-check me-1"></i> Admin
+                </span>
+              {% endif %}
+            </p>
           </div>
 
           <div class="col-md-6">
@@ -234,6 +298,85 @@
               <span class="badge bg-secondary">{{ e.role.name if e.role else 'Not assigned' }}</span>
             </p>
           </div>
+
+          <div class="col-12">
+            <hr class="my-3">
+            <h6 class="text-muted mb-3">
+              <i class="bi bi-person-lock me-2"></i>User Account
+            </h6>
+          </div>
+
+          {% if e.user %}
+          <div class="col-md-6">
+            <label class="form-label fw-bold text-muted small">Username</label>
+            <p class="mb-0">
+              <span class="badge rounded-pill bg-success">{{ e.user.username }}</span>
+            </p>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-bold text-muted small">Account Status</label>
+            <p class="mb-0">
+              {% if e.user.is_active %}
+                <span class="badge rounded-pill bg-success">Active</span>
+              {% else %}
+                <span class="badge rounded-pill bg-secondary">Inactive</span>
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="col-12 mt-2">
+            <button class="btn btn-sm btn-warning" data-bs-toggle="modal" 
+                    data-bs-target="#resetPasswordModal{{ e.id }}">
+              <i class="bi bi-key me-2"></i> Reset Password
+            </button>
+          </div>
+          {% else %}
+          <div class="col-12">
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              This employee does not have a user account yet.
+            </div>
+          </div>
+          {% endif %}
+
+          {% if e.user %}
+          <div class="col-12">
+            <hr class="my-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-1">
+                  <i class="bi bi-shield-lock me-2"></i>Admin Privileges
+                </h6>
+                <p class="text-muted small mb-0">
+                  {% if e.user.is_admin() %}
+                    This user has full administrative access.
+                  {% else %}
+                    This user has regular employee access.
+                  {% endif %}
+                </p>
+              </div>
+              
+              {% if e.user.username == 'admin' or e.employee_id == 'EMP-00001' %}
+                <span class="badge bg-danger px-3 py-2">
+                  <i class="bi bi-lock-fill me-1"></i> System Admin (Protected)
+                </span>
+              {% else %}
+                <form method="POST" action="{{ url_for('toggle_employee_admin', employee_id=e.id) }}" class="d-inline">
+                  {% if e.user.is_admin() %}
+                    <button type="submit" class="btn btn-warning">
+                      <i class="bi bi-shield-x me-2"></i> Revoke Admin
+                    </button>
+                  {% else %}
+                    <button type="submit" class="btn btn-success">
+                      <i class="bi bi-shield-check me-2"></i> Grant Admin
+                    </button>
+                  {% endif %}
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
       <div class="modal-footer">
@@ -314,6 +457,35 @@
                 {% endfor %}
               </select>
             </div>
+
+            {% if e.user %}
+            <div class="col-12">
+              <hr class="my-3">
+              <h6 class="text-muted mb-3">
+                <i class="bi bi-person-lock me-2"></i>User Account
+              </h6>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Username</label>
+              <input class="form-control" name="username" value="{{ e.user.username }}" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Account Status</label>
+              <select class="form-select" name="is_active">
+                <option value="1" {% if e.user.is_active %}selected{% endif %}>Active</option>
+                <option value="0" {% if not e.user.is_active %}selected{% endif %}>Inactive</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                To change password, use the "Reset Password" button in the employee details view.
+              </div>
+            </div>
+            {% endif %}
           </div>
         </div>
         <div class="modal-footer">
@@ -324,6 +496,35 @@
     </div>
   </div>
 </div>
+{% endfor %}
+
+<!-- Reset Password Modals -->
+{% for e in employees %}
+{% if e.user %}
+<div class="modal fade" id="resetPasswordModal{{ e.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Reset Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{{ url_for('reset_employee_password', employee_id=e.id) }}">
+        <div class="modal-body">
+          <p>Reset password for <strong>{{ e.full_name() }}</strong> ({{ e.user.username }})?</p>
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <input class="form-control" name="new_password" type="password" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endfor %}
 
 <!-- Delete Employee Modals -->

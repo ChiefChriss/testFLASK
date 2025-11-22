@@ -1,7 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
+    <div>
+        <h1 class="h2 mb-1">Dashboard</h1>
+        {% if current_user %}
+        <p class="text-muted mb-0">
+            Welcome back, <strong>
+            {% if current_user.employee %}
+                {{ current_user.employee.first_name }}
+            {% else %}
+                {{ current_user.username }}
+            {% endif %}
+            </strong>
+            {% if current_user.is_admin() %}
+                <span class="badge rounded-pill bg-danger ms-2">
+                    <i class="bi bi-shield-check"></i> Admin
+                </span>
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
             <button type="button" class="btn btn-sm btn-outline-secondary">Share</button>
@@ -69,8 +87,15 @@
               </thead>
               <tbody>
                 {% for t in my_tasks %}
-                <tr>
-                  <td class="ps-3 fw-medium">{{ t.title }}</td>
+                <tr style="cursor: pointer;" onclick="window.location.href='{{ url_for('view_task', task_id=t.id) }}'">
+                  <td class="ps-3 fw-medium">
+                    {{ t.title }}
+                    {% if t.comments|length > 0 %}
+                      <span class="badge rounded-pill bg-light text-dark border ms-2" style="font-size: 0.7rem;">
+                        <i class="bi bi-chat-left-text"></i> {{ t.comments|length }}
+                      </span>
+                    {% endif %}
+                  </td>
                   <td>
                       <span class="badge rounded-pill 
                         {% if t.status.label == 'Complete' %}bg-success
@@ -81,7 +106,7 @@
                   </td>
                   <td>
                       {% if t.assigned_group %}
-                        <span class="badge bg-info text-dark">{{ t.assigned_group.name }}</span>
+                        <span class="badge rounded-pill bg-info text-white">{{ t.assigned_group.name }}</span>
                       {% else %}
                         <span class="text-muted fst-italic">--</span>
                       {% endif %}
